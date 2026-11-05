@@ -156,9 +156,13 @@ else:
     current_date = datetime.now(ZoneInfo("Asia/Yerevan")).strftime("%d/%m/%Y")
 
     rendered_text = (
-        template_text.replace("{{first_name}}", first_name).replace("{{surname}}", surname).replace("{{current_date}}", current_date)
+        template_text
+        .replace("\t", "")
+        .replace("{{first_name}}", first_name)
+        .replace("{{surname}}", surname)
+        .replace("{{current_date}}", current_date)
     )
-
+    st.subheader("Document Preview")
     st.text(rendered_text)
     st.caption(f"Template version: {template_version}")
 
