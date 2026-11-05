@@ -84,6 +84,43 @@ def generate_pdf(rendered_text):
     return output.getvalue()
 
 
+def escape_rtf(text):
+    escaped_characters = []
+
+    for character in text:
+        codepoint = ord(character)
+
+        if codepoint > 127:
+            if codepoint <= 32767:
+                escaped_characters.append(f"\\u{codepoint}?")
+            else:
+                escaped_characters.append(f"\\u{codepoint - 65536}?")
+        elif character == "\\":
+            escaped_characters.append("\\\\")
+        elif character == "{":
+            escaped_characters.append("\\{")
+        elif character == "}":
+            escaped_characters.append("\\}")
+        elif character == "\n":
+            escaped_characters.append("\\par\n")
+        else:
+            escaped_characters.append(character)
+
+    return "".join(escaped_characters)
+
+
+def generate_rtf(rendered_text):
+    rtf_content = escape_rtf(rendered_text)
+    rtf_document = (
+        "{\\rtf1\\ansi\\deff0"
+        "{\\fonttbl{\\f0 Arial;}}"
+        "\\f0\\fs24 "
+        + rtf_content
+        + "}"
+    )
+    return rtf_document.encode("ascii")
+
+
 st.set_page_config(
     page_title="Customer Document Manager",
     page_icon="📄",
@@ -134,3 +171,12 @@ else:
                 file_name=f"customer_{customer_id}.pdf",
                 mime="application/pdf",
             )
+        else:
+            rtf_data = generate_rtf(rendered_text)
+            st.download_button(
+                label="Download RTF",
+                data=rtf_data,
+                file_name=f"customer_{customer_id}.rtf",
+                mime="application/rtf",
+            )
+    
