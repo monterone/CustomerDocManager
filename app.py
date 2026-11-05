@@ -1,10 +1,16 @@
 import os
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import psycopg
 import streamlit as st
 from dotenv import load_dotenv
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 
 load_dotenv()
@@ -49,6 +55,35 @@ def get_template():
             return cursor.fetchone()
 
 
+def generate_pdf(rendered_text):
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=A4)
+
+    font_path = Path(__file__).parent / "assets" / "fonts" / "NotoSansArmenian-Regular.ttf"
+    font_bold_path = Path(__file__).parent / "assets" / "fonts" / "NotoSansArmenian-Bold.ttf"
+
+    pdfmetrics.registerFont(TTFont("NotoSansArmenian", str(font_path)))
+    pdfmetrics.registerFont(TTFont("NotoSansArmenian-Bold", str(font_bold_path)))
+
+    lines = rendered_text.splitlines()
+    page_width, page_height = A4
+    y_position = page_height - 72
+
+    pdf.setFont("NotoSansArmenian-Bold", 16)
+    pdf.drawString(72, y_position, lines[0])
+    y_position -= 36
+
+    pdf.setFont("NotoSansArmenian", 12)
+    for line in lines[1:]:
+        if line:
+            pdf.drawString(72, y_position, line)
+        y_position -= 24
+
+    pdf.save()
+    output.seek(0)
+    return output.getvalue()
+
+
 st.set_page_config(
     page_title="Customer Document Manager",
     page_icon="📄",
@@ -89,3 +124,13 @@ else:
 
     st.text(rendered_text)
     st.caption(f"Template version: {template_version}")
+
+    if st.button("Generate document", type="primary"):
+        if document_format == "PDF":
+            pdf_data = generate_pdf(rendered_text)
+            st.download_button(
+                label="Download PDF",
+                data=pdf_data,
+                file_name=f"customer_{customer_id}.pdf",
+                mime="application/pdf",
+            )
