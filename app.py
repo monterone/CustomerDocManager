@@ -39,7 +39,7 @@ def get_customers():
             return cursor.fetchall()
 
 
-def get_template():
+def get_template(template_name):
     with get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -50,9 +50,23 @@ def get_template():
                 ORDER BY version DESC
                 LIMIT 1
                 """,
-                ("customer_details",),
+                (template_name, ),
             )
             return cursor.fetchone()
+
+
+def get_template_names():
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT name
+                FROM public.document_templates
+                WHERE is_active = TRUE
+                ORDER BY name
+                """
+            )
+            return [row[0] for row in cursor.fetchall()]
 
 
 def generate_pdf(rendered_text):
@@ -129,6 +143,19 @@ st.set_page_config(
 
 st.title("Customer Document Manager")
 
+template_names = get_template_names()
+
+if not template_names:
+    st.error("Active templates were not found. Please add templates to the database.")
+else:
+    template_name = st.selectbox(
+        "SELECT TEMPLATE",
+        template_names,
+    )
+
+    template_row = get_template(template_name)
+
+
 selected_customer = st.selectbox(
     label="CLICK TO SELECT CUSTOMER",
     options=get_customers(),
@@ -147,8 +174,7 @@ document_format = st.radio(
     horizontal=True,
 )
 
-template_row = get_template()
-
+template_row = get_template(template_name)
 if template_row is None:
     st.error("Active customer_details template was not found.")
 else:
