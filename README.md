@@ -1,52 +1,117 @@
-# Customer ETL with Docker
+# Customer Document Manager
 
-This setup provides PostgreSQL and pgAdmin. The PostgreSQL initialization scripts
-create the `customers` table and load the synthetic data from
-`public_schema/customer.csv` using an idempotent staging-table ETL.
+This project uses Docker Compose for PostgreSQL and pgAdmin, and Streamlit for
+the customer document interface. PostgreSQL initialization creates the
+`customers` and `document_templates` tables and loads synthetic CSV data.
+
+## Prerequisites
+
+- Docker Engine or Docker Desktop with Docker Compose
+- Python 3.11 or newer
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and replace the example passwords.
-2. Start the services:
+### Windows PowerShell
+
+1. Create the environment file:
 
    ```powershell
-   docker compose up -d
+   Copy-Item .env.example .env
    ```
 
-3. Verify PostgreSQL initialization:
+2. Create the virtual environment and install dependencies:
 
    ```powershell
-   docker compose exec postgres psql -U customer_app -d customer_doc_manager -c "SELECT COUNT(*), MIN(customer_id), MAX(customer_id) FROM customers;"
+   python -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
    ```
 
-   If you changed `POSTGRES_USER` or `POSTGRES_DB`, use those values instead of
-   the examples above.
+### Linux and macOS
 
-4. Open pgAdmin at `http://localhost:5050`.
-   Use the values configured in `.env` as the login email and password.
-   Add a server with host `postgres`, port `5432`, database from
-   `POSTGRES_DB`, and user from `POSTGRES_USER`.
+1. Create the environment file:
 
-Stop the services with `docker compose down`. The `postgres_data` volume keeps
-database data. To perform a clean database initialization, remove that named
-volume with `docker compose down -v`.
+   ```bash
+   cp .env.example .env
+   ```
 
-If initialization failed before the database was ready, recreate the containers
-without deleting data, then run the ETL manually:
+2. Create the virtual environment and install dependencies:
 
-```powershell
-docker compose down
-docker compose up -d postgres
-docker compose exec postgres psql -U customer_app -d customer_doc_manager -f /docker-entrypoint-initdb.d/01_customer_etl.sql
-docker compose up -d pgadmin
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   python -m pip install -r requirements.txt
+   ```
+
+Replace the example passwords and credentials in `.env` with your own values
+before starting the services.
+
+### Start the database and pgAdmin
+
+Run this command on Windows, Linux, or macOS:
+
+```bash
+docker compose up -d
 ```
 
-## SQL ETL
+Verify the data:
+
+```bash
+docker compose exec postgres psql -U customer_app -d customer_doc_manager -c "SELECT COUNT(*) FROM customers;"
+```
+
+If you changed `POSTGRES_USER` or `POSTGRES_DB`, use those values in this
+command instead.
+
+Open pgAdmin at `http://localhost:5050`. Use the email and password from
+`.env` in `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD`.
+
+Register the PostgreSQL server in pgAdmin with:
+
+- Host: `postgres`
+- Port: `5432`
+- Maintenance database: value of `POSTGRES_DB`
+- Username: value of `POSTGRES_USER`
+- Password: value of `POSTGRES_PASSWORD`
+
+Stop the containers while preserving their data with:
+
+```bash
+docker compose down
+```
+
+To delete the database and pgAdmin volumes and initialize them again from
+scratch, use:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+## Streamlit application
+
+### Windows PowerShell
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+### Linux and macOS
+
+```bash
+source .venv/bin/activate
+streamlit run app.py
+```
+
+Open the Streamlit URL shown in the terminal, usually
+`http://localhost:8501`.
+
+## SQL initialization
 
 `public_schema/01_customer_etl.sql`:
 
 - Creates `public.customers` if missing.
-- Clears the table before loading.
+- Seeds `public.customers` from `customer.csv`.
+- Creates and seeds `public.document_templates`.
 - Loads `public_schema/customer.csv` directly into `public.customers`.
 - Preserves Armenian Unicode text because the CSV and PostgreSQL connection
   use UTF-8.
@@ -54,6 +119,6 @@ docker compose up -d pgadmin
 Initialization scripts run only on a new PostgreSQL data volume. To rerun the
 ETL manually:
 
-```powershell
+```bash
 docker compose exec postgres psql -U customer_app -d customer_doc_manager -f /docker-entrypoint-initdb.d/01_customer_etl.sql
 ```
