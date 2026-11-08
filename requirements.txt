@@ -2,3 +2,5 @@ streamlit==1.66.1
 psycopg[binary]==3.3.8
 python-dotenv==1.2.4
 reportlab==5.1.0
+fastapi==0.115.12
+uvicorn==0.34.2
