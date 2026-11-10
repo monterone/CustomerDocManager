@@ -1,7 +1,10 @@
+import json
 import os
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -174,6 +177,9 @@ document_format = st.radio(
     horizontal=True,
 )
 
+recipient_email = st.text_input("Recipient email")
+send_by_email = st.button("Send document by email")
+
 template_row = get_template(template_name)
 if template_row is None:
     st.error("Active customer_details template was not found.")
@@ -209,4 +215,37 @@ else:
                 file_name=f"customer_{customer_id}.rtf",
                 mime="application/rtf",
             )
+
+    if send_by_email:
+        if not recipient_email.strip():
+            st.error("Enter a recipient email address.")
+        else:
+            webhook_url = os.getenv("N8N_WEBHOOK_URL")
+            if not webhook_url:
+                st.error("N8N_WEBHOOK_URL is not configured.")
+            else:
+                payload = json.dumps(
+                    {
+                        "customer_id": customer_id,
+                        "email": recipient_email.strip(),
+                        "document_format": document_format,
+                        "template_name": template_name
+                    }
+                ).encode("utf-8")
+                request = Request(
+                    webhook_url,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+
+                try:
+                    with urlopen(request, timeout=30) as response:
+                        response.read()
+                except HTTPError as error:
+                    st.error(f"n8n returned HTTP {error.code}.")
+                except (URLError, TimeoutError) as error:
+                    st.error(f"Could not connect to n8n: {error}")
+                else:
+                    st.success("Request sent to n8n.")
     
