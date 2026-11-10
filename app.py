@@ -1,141 +1,19 @@
 import json
 import os
 from datetime import datetime
-from io import BytesIO
-from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-import psycopg
 import streamlit as st
 from dotenv import load_dotenv
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
+
+from database import get_customers, get_template, get_template_names, get_customers_values
+from document_generation import generate_pdf, generate_rtf
+from templating import render_template
 
 
 load_dotenv()
-
-
-def get_connection():
-    return psycopg.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=os.getenv("POSTGRES_PORT", "5432"),
-        dbname=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-    )
-
-
-def get_customers():
-    with get_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT customer_id, first_name, surname
-                FROM public.customers
-                ORDER BY customer_id
-                """
-            )
-            return cursor.fetchall()
-
-
-def get_template(template_name):
-    with get_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT template_text, version
-                FROM public.document_templates
-                WHERE name = %s AND is_active = TRUE
-                ORDER BY version DESC
-                LIMIT 1
-                """,
-                (template_name, ),
-            )
-            return cursor.fetchone()
-
-
-def get_template_names():
-    with get_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT DISTINCT name
-                FROM public.document_templates
-                WHERE is_active = TRUE
-                ORDER BY name
-                """
-            )
-            return [row[0] for row in cursor.fetchall()]
-
-
-def generate_pdf(rendered_text):
-    output = BytesIO()
-    pdf = canvas.Canvas(output, pagesize=A4)
-
-    font_path = Path(__file__).parent / "assets" / "fonts" / "NotoSansArmenian-Regular.ttf"
-    font_bold_path = Path(__file__).parent / "assets" / "fonts" / "NotoSansArmenian-Bold.ttf"
-
-    pdfmetrics.registerFont(TTFont("NotoSansArmenian", str(font_path)))
-    pdfmetrics.registerFont(TTFont("NotoSansArmenian-Bold", str(font_bold_path)))
-
-    lines = rendered_text.splitlines()
-    page_width, page_height = A4
-    y_position = page_height - 72
-
-    pdf.setFont("NotoSansArmenian-Bold", 16)
-    pdf.drawString(72, y_position, lines[0])
-    y_position -= 36
-
-    pdf.setFont("NotoSansArmenian", 12)
-    for line in lines[1:]:
-        if line:
-            pdf.drawString(72, y_position, line)
-        y_position -= 24
-
-    pdf.save()
-    output.seek(0)
-    return output.getvalue()
-
-
-def escape_rtf(text):
-    escaped_characters = []
-
-    for character in text:
-        codepoint = ord(character)
-
-        if codepoint > 127:
-            if codepoint <= 32767:
-                escaped_characters.append(f"\\u{codepoint}?")
-            else:
-                escaped_characters.append(f"\\u{codepoint - 65536}?")
-        elif character == "\\":
-            escaped_characters.append("\\\\")
-        elif character == "{":
-            escaped_characters.append("\\{")
-        elif character == "}":
-            escaped_characters.append("\\}")
-        elif character == "\n":
-            escaped_characters.append("\\par\n")
-        else:
-            escaped_characters.append(character)
-
-    return "".join(escaped_characters)
-
-
-def generate_rtf(rendered_text):
-    rtf_content = escape_rtf(rendered_text)
-    rtf_document = (
-        "{\\rtf1\\ansi\\deff0"
-        "{\\fonttbl{\\f0 Arial;}}"
-        "\\f0\\fs24 "
-        + rtf_content
-        + "}"
-    )
-    return rtf_document.encode("ascii")
 
 
 st.set_page_config(
@@ -168,8 +46,6 @@ selected_customer = st.selectbox(
 )
 
 customer_id = selected_customer[0]
-first_name = selected_customer[1]
-surname = selected_customer[2]
 
 document_format = st.radio(
     "SELECT DOCUMENT FORMAT",
@@ -187,13 +63,19 @@ else:
     template_text, template_version = template_row
     current_date = datetime.now(ZoneInfo("Asia/Yerevan")).strftime("%d/%m/%Y")
 
-    rendered_text = (
-        template_text
-        .replace("\t", "")
-        .replace("{{first_name}}", first_name)
-        .replace("{{surname}}", surname)
-        .replace("{{current_date}}", current_date)
-    )
+    values = get_customers_values(customer_id)
+
+    if values is None:
+        st.error("Customer details were not found in the database.")
+        st.stop()
+
+    values["current_date"] = current_date
+    try:
+        rendered_text = render_template(template_text, values)
+    except ValueError as error:
+        st.error(str(error))
+        st.stop()
+
     st.subheader("Document Preview")
     st.text(rendered_text)
     st.caption(f"Template version: {template_version}")
@@ -248,4 +130,3 @@ else:
                     st.error(f"Could not connect to n8n: {error}")
                 else:
                     st.success("Request sent to n8n.")
-    
