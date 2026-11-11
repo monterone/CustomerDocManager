@@ -1,4 +1,4 @@
-"""PDF and RTF generation from rendered text."""
+"""PDF, RTF, and DOCX document generation."""
 
 from io import BytesIO
 from pathlib import Path
@@ -7,6 +7,29 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
+
+
+def generate_docx(template_file, values):
+    from docxtpl import DocxTemplate
+
+    if not template_file:
+        raise ValueError("The DOCX template file is empty.")
+
+    document = DocxTemplate(BytesIO(template_file))
+    field_names = document.get_undeclared_template_variables()
+    context = {}
+
+    for name in field_names:
+        value = values.get(name)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            context[name] = "None"
+        else:
+            context[name] = value
+
+    document.render(context, autoescape=True)
+    output = BytesIO()
+    document.save(output)
+    return output.getvalue()
 
 
 def generate_pdf(rendered_text):

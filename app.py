@@ -9,7 +9,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from database import get_customers, get_template, get_template_names, get_customers_values
-from document_generation import generate_pdf, generate_rtf
+from document_generation import generate_pdf, generate_rtf, generate_docx
 from templating import render_template
 
 
@@ -47,12 +47,6 @@ selected_customer = st.selectbox(
 
 customer_id = selected_customer[0]
 
-document_format = st.radio(
-    "SELECT DOCUMENT FORMAT",
-    ["RTF", "PDF"],
-    horizontal=True,
-)
-
 recipient_email = st.text_input("Recipient email")
 send_by_email = st.button("Send document by email")
 
@@ -60,7 +54,50 @@ template_row = get_template(template_name)
 if template_row is None:
     st.error("Active customer_details template was not found.")
 else:
-    template_text, template_version = template_row
+    template_text, template_version, template_format, template_file = template_row
+
+    if template_format == "text":
+        available_formats = ["RTF", "PDF"]
+    elif template_format == "docx":
+        available_formats = ["DOCX"]
+    else:
+        st.error("Unsupported template format.")
+        st.stop()
+
+    document_format = st.radio(
+        "SELECT DOCUMENT FORMAT",
+        options=available_formats,
+        horizontal=True,
+        key=f"document_format_{template_format}",
+    )
+
+    if template_format == "docx":
+        values = get_customers_values(customer_id)
+
+        if values is None:
+            st.error("Customer details were not found in the database.")
+            st.stop()
+
+        values["current_date"] = datetime.now(
+            ZoneInfo("Asia/Yerevan")
+        ).strftime("%d/%m/%Y")
+
+        st.caption(f"Template version: {template_version}")
+
+        if st.button("Generate DOCX", type="primary"):
+            docx_data = generate_docx(template_file, values)
+
+            st.download_button(
+                label="Download DOCX",
+                data=docx_data,
+                file_name=f"customer_{customer_id}.docx",
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "wordprocessingml.document"
+                ),
+            )
+        st.stop()
+
     current_date = datetime.now(ZoneInfo("Asia/Yerevan")).strftime("%d/%m/%Y")
 
     values = get_customers_values(customer_id)
