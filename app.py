@@ -34,9 +34,6 @@ else:
         template_names,
     )
 
-    template_row = get_template(template_name)
-
-
 selected_customer = st.selectbox(
     label="CLICK TO SELECT CUSTOMER",
     options=get_customers(),
@@ -68,7 +65,6 @@ else:
         "SELECT DOCUMENT FORMAT",
         options=available_formats,
         horizontal=True,
-        key=f"document_format_{template_format}",
     )
 
     if template_format == "docx":
@@ -78,9 +74,7 @@ else:
             st.error("Customer details were not found in the database.")
             st.stop()
 
-        values["current_date"] = datetime.now(
-            ZoneInfo("Asia/Yerevan")
-        ).strftime("%d/%m/%Y")
+        values["current_date"] = datetime.now(ZoneInfo("Asia/Yerevan")).strftime("%d/%m/%Y")
 
         st.caption(f"Template version: {template_version}")
 

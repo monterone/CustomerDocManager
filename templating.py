@@ -11,7 +11,7 @@ def render_template(template_text, values):
 
     if missing:
         raise ValueError(
-            f"Нет данных для полей: {', '.join(sorted(missing))}"
+            f"There is no value for placeholders: {', '.join(sorted(missing))}"
         )
 
     return re.sub(
