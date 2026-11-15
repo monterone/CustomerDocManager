@@ -9,7 +9,42 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 
-def generate_docx(template_file, values):
+def create_table_subdocument(document, columns, rows, style="Table Grid"):
+    """{{p table}}."""
+    if not columns:
+        raise ValueError("At least one table column is required.")
+
+    for column in columns:
+        if not isinstance(column, dict):
+            raise ValueError("Each column must define a key and a title.")
+        if not isinstance(column.get("key"), str) or not column["key"].strip():
+            raise ValueError("Each column must have a non-empty string key.")
+        if not isinstance(column.get("title"), str):
+            raise ValueError("Each column must have a string title.")
+
+    subdocument = document.new_subdoc()
+    table = subdocument.add_table(rows=1, cols=len(columns))
+    table.style = style
+
+    for index, column in enumerate(columns):
+        table.rows[0].cells[index].text = column["title"]
+
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Each table row must be a dictionary.")
+
+        cells = table.add_row().cells
+        for index, column in enumerate(columns):
+            value = row.get(column["key"])
+            if value is None or (isinstance(value, str) and not value.strip()):
+                cells[index].text = "None"
+            else:
+                cells[index].text = str(value)
+
+    return subdocument
+
+
+def generate_docx(template_file, values, tables=None):
     from docxtpl import DocxTemplate
 
     if not template_file:
@@ -17,9 +52,30 @@ def generate_docx(template_file, values):
 
     document = DocxTemplate(BytesIO(template_file))
     field_names = document.get_undeclared_template_variables()
+    if tables is None:
+        tables = {}
+
+    unknown_tables = tables.keys() - field_names
+    if unknown_tables:
+        raise ValueError(
+            f"Table placeholders not found in template: {', '.join(sorted(unknown_tables))}"
+        )
+
     context = {}
 
     for name in field_names:
+        if name in tables:
+            definition = tables[name]
+            if not isinstance(definition, dict) or not {"columns", "rows"} <= definition.keys():
+                raise ValueError(f"Table '{name}' must define columns and rows.")
+            context[name] = create_table_subdocument(
+                document,
+                definition["columns"],
+                definition["rows"],
+                style=definition.get("style", "Table Grid"),
+            )
+            continue
+
         value = values.get(name)
         if value is None or (isinstance(value, str) and not value.strip()):
             context[name] = "None"

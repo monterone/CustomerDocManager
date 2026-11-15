@@ -41,6 +41,23 @@ def get_customers_values(customer_id):
             return cursor.fetchone()
 
 
+def get_customer_list():
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(load_query("get_customer_list.sql"))
+            return cursor.fetchall()
+
+
+def get_template_tables(template_version_id):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                load_query("get_template_tables.sql"),
+                (template_version_id,),
+            )
+            return cursor.fetchall()
+
+
 def get_template(template_name):
     with get_connection() as connection:
         with connection.cursor() as cursor:

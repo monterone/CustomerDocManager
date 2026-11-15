@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from database import get_customers, get_template, get_template_names, get_customers_values
 from document_generation import generate_pdf, generate_rtf, generate_docx
+from table_context import build_table_context
 from templating import render_template
 
 
@@ -51,7 +52,7 @@ template_row = get_template(template_name)
 if template_row is None:
     st.error("Active customer_details template was not found.")
 else:
-    template_text, template_version, template_format, template_file = template_row
+    template_text, template_version, template_format, template_file, template_version_id = template_row
 
     if template_format == "text":
         available_formats = ["RTF", "PDF"]
@@ -79,7 +80,8 @@ else:
         st.caption(f"Template version: {template_version}")
 
         if st.button("Generate DOCX", type="primary"):
-            docx_data = generate_docx(template_file, values)
+            tables = build_table_context(template_version_id)
+            docx_data = generate_docx(template_file, values, tables=tables)
 
             st.download_button(
                 label="Download DOCX",

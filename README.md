@@ -2,7 +2,8 @@
 
 This project uses Docker Compose for PostgreSQL and pgAdmin, and Streamlit for
 the customer document interface. PostgreSQL initialization creates the
-`customers` and `document_templates` tables and loads synthetic CSV data.
+`customers`, `templates`, and `template_versions`
+tables and loads synthetic CSV data.
 
 ## Prerequisites
 
@@ -111,14 +112,22 @@ Open the Streamlit URL shown in the terminal, usually
 
 - Creates `public.customers` if missing.
 - Seeds `public.customers` from `customer.csv`.
-- Creates and seeds `public.document_templates`.
+- Creates `public.templates` and `public.template_versions`, including their
+  constraints and indexes.
+- Seeds the `customer_details` catalog entry and its first published text version.
 - Loads `public_schema/customer.csv` directly into `public.customers`.
 - Preserves Armenian Unicode text because the CSV and PostgreSQL connection
   use UTF-8.
 
-Initialization scripts run only on a new PostgreSQL data volume. To rerun the
-ETL manually:
+New databases are initialized directly with the current schema. No legacy
+`document_templates` table is created. Scripts in `public_schema` run automatically
+only when the PostgreSQL data volume is empty; restarting an existing database
+does not rerun initialization.
 
-```bash
-docker compose exec postgres psql -U customer_app -d customer_doc_manager -f /docker-entrypoint-initdb.d/01_customer_etl.sql
-```
+The application queries use non-archived catalog entries and their published
+versions.
+
+Do not rerun `01_customer_etl.sql` to upgrade an existing database: it truncates
+and reloads customers from CSV. Additional templates, uploaded DOCX files, and
+customer columns added manually to a development database are not exported by
+these initialization scripts; back them up separately when moving that data.
