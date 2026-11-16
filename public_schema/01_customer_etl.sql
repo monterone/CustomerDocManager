@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS public.template_version_tables (
     columns_config JSONB NOT NULL,
     style VARCHAR(100) NOT NULL DEFAULT 'Table Grid' CHECK (btrim(style) <> ''),
     source_key VARCHAR(100) NOT NULL CHECK (btrim(source_key) <> ''),
+    query_config JSONB,
+    CONSTRAINT template_version_tables_query_config_check
+        CHECK (query_config IS NULL OR jsonb_typeof(query_config) = 'object'),
     CONSTRAINT template_version_tables_placeholder_key
         UNIQUE (template_version_id, placeholder_name),
     CONSTRAINT template_version_tables_columns_check CHECK (

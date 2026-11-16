@@ -9,8 +9,8 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from database import get_customers, get_template, get_template_names, get_customers_values
-from document_generation import generate_pdf, generate_rtf, generate_docx
-from table_context import build_table_context
+from document_generation import generate_pdf, generate_rtf
+from document_service import load_table_definitions, generate_docx_from_queries
 from templating import render_template
 
 
@@ -80,8 +80,21 @@ else:
         st.caption(f"Template version: {template_version}")
 
         if st.button("Generate DOCX", type="primary"):
-            tables = build_table_context(template_version_id)
-            docx_data = generate_docx(template_file, values, tables=tables)
+            document_context = {
+                "entity": {"schema": "public", "table": "customers"},
+                "key": {"customer_id": customer_id},
+            }
+            try:
+                table_definitions = load_table_definitions(template_version_id)
+                docx_data = generate_docx_from_queries(
+                    template_file,
+                    values,
+                    table_definitions,
+                    document_context=document_context,
+                )
+            except ValueError as error:
+                st.error(str(error))
+                st.stop()
 
             st.download_button(
                 label="Download DOCX",

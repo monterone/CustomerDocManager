@@ -1,6 +1,3 @@
-from io import BytesIO
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.responses import Response
 from pydantic import BaseModel
