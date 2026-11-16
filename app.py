@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from database import get_customers, get_template, get_template_names, get_customers_values
 from document_generation import generate_pdf, generate_rtf
-from document_service import load_table_definitions, generate_docx_from_queries
+from document_service import load_table_definitions, load_image_definitions, generate_docx_from_queries
 from templating import render_template
 
 
@@ -91,6 +91,7 @@ else:
                     values,
                     table_definitions,
                     document_context=document_context,
+                    images=load_image_definitions(template_version_id),
                 )
             except ValueError as error:
                 st.error(str(error))

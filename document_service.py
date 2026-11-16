@@ -1,6 +1,18 @@
-from database import get_template_tables
+from database import get_template_tables, get_template_images
 from document_generation import generate_docx
 from table_query import fetch_table_rows
+
+
+def load_image_definitions(template_version_id):
+    return {
+        setting["placeholder_name"]: {
+            "data": bytes(setting["image_data"]),
+            "mime_type": setting["mime_type"],
+            "width_mm": setting["width_mm"],
+            "height_mm": setting["height_mm"],
+        }
+        for setting in get_template_images(template_version_id)
+    }
 
 
 def load_table_definitions(template_version_id):
@@ -47,8 +59,10 @@ def build_query_tables(table_definitions, document_context=None):
     return tables
 
 
-def generate_docx_from_queries(template_file, values, table_definitions, document_context=None):
+def generate_docx_from_queries(template_file, values, table_definitions, document_context=None, images=None):
     if not template_file:
         raise ValueError("The DOCX template file is empty.")
     tables = build_query_tables(table_definitions, document_context)
-    return generate_docx(template_file, values, tables=tables)
+    if images is None:
+        return generate_docx(template_file, values, tables=tables)
+    return generate_docx(template_file, values, tables=tables, images=images)

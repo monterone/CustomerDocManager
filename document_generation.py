@@ -1,6 +1,7 @@
 """PDF, RTF, and DOCX document generation."""
 
 from io import BytesIO
+from math import isfinite
 from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
@@ -44,8 +45,10 @@ def create_table_subdocument(document, columns, rows, style="Table Grid"):
     return subdocument
 
 
-def generate_docx(template_file, values, tables=None):
-    from docxtpl import DocxTemplate
+def generate_docx(template_file, values, tables=None, images=None):
+    from docxtpl import DocxTemplate, InlineImage
+    from docx.image.image import Image
+    from docx.shared import Mm
 
     if not template_file:
         raise ValueError("The DOCX template file is empty.")
@@ -54,6 +57,15 @@ def generate_docx(template_file, values, tables=None):
     field_names = document.get_undeclared_template_variables()
     if tables is None:
         tables = {}
+    if images is None:
+        images = {}
+
+    conflicts = tables.keys() & images.keys()
+    if conflicts:
+        raise ValueError(f"Placeholders cannot be both tables and images: {', '.join(sorted(conflicts))}")
+    unknown_images = images.keys() - field_names
+    if unknown_images:
+        raise ValueError(f"Image placeholders not found in template: {', '.join(sorted(unknown_images))}")
 
     unknown_tables = tables.keys() - field_names
     if unknown_tables:
@@ -64,6 +76,28 @@ def generate_docx(template_file, values, tables=None):
     context = {}
 
     for name in field_names:
+        if name in images:
+            definition = images[name]
+            try:
+                data = bytes(definition["data"])
+                image = Image.from_file(BytesIO(data))
+                if image.content_type not in ("image/png", "image/jpeg"):
+                    raise ValueError("Only PNG and JPEG images are supported.")
+                if definition.get("mime_type", image.content_type) != image.content_type:
+                    raise ValueError("The image format does not match its MIME type.")
+                dimensions = {}
+                for dimension in ("width", "height"):
+                    size = definition.get(f"{dimension}_mm")
+                    if size is not None:
+                        size = float(size)
+                        if not isfinite(size) or size <= 0:
+                            raise ValueError("Image dimensions must be positive finite numbers.")
+                        dimensions[dimension] = Mm(size)
+                context[name] = InlineImage(document, BytesIO(data), **dimensions)
+            except Exception as error:
+                raise ValueError(f"Invalid image '{name}': {error}") from error
+            continue
+
         if name in tables:
             definition = tables[name]
             if not isinstance(definition, dict) or not {"columns", "rows"} <= definition.keys():

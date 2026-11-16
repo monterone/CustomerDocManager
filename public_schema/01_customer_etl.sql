@@ -71,6 +71,31 @@ CREATE TABLE IF NOT EXISTS public.template_version_tables (
     )
 );
 
+CREATE TABLE IF NOT EXISTS public.image_assets (
+    image_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(255) NOT NULL CHECK (btrim(name) <> ''),
+    mime_type VARCHAR(100) NOT NULL
+        CHECK (mime_type IN ('image/png', 'image/jpeg')),
+    image_data BYTEA NOT NULL CHECK (octet_length(image_data) > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS public.template_version_images (
+    image_binding_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    template_version_id INTEGER NOT NULL
+        REFERENCES public.template_versions (template_version_id) ON DELETE RESTRICT,
+    placeholder_name VARCHAR(100) NOT NULL CHECK (btrim(placeholder_name) <> ''),
+    image_id INTEGER NOT NULL
+        REFERENCES public.image_assets (image_id) ON DELETE RESTRICT,
+    width_mm NUMERIC(10, 2) CHECK (width_mm > 0 AND width_mm <> 'NaN'::numeric),
+    height_mm NUMERIC(10, 2) CHECK (height_mm > 0 AND height_mm <> 'NaN'::numeric),
+    CONSTRAINT template_version_images_placeholder_key
+        UNIQUE (template_version_id, placeholder_name)
+);
+
+CREATE INDEX IF NOT EXISTS template_version_images_image_id_idx
+    ON public.template_version_images (image_id);
+
 INSERT INTO public.templates (code, name, description)
 VALUES (
     'customer_details',

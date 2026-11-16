@@ -51,6 +51,13 @@ def get_template_tables(template_version_id):
             return cursor.fetchall()
 
 
+def get_template_images(template_version_id):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(load_query("get_template_images.sql"), (template_version_id,))
+            return cursor.fetchall()
+
+
 def get_template(template_name):
     with get_connection() as connection:
         with connection.cursor() as cursor:
