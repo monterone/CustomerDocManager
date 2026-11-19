@@ -1,27 +1,6 @@
-"""PostgreSQL connections and document/customer queries."""
-
-import os
-from pathlib import Path
-
-import psycopg
 from psycopg.rows import dict_row
 
-
-queries_dir = Path(__file__).resolve().parent / "queries"
-
-
-def load_query(filename):
-    return (queries_dir / filename).read_text(encoding="utf-8")
-
-
-def get_connection():
-    return psycopg.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=os.getenv("POSTGRES_PORT", "5432"),
-        dbname=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-    )
+from document_manager.database.connection import get_connection, load_query
 
 
 def get_customers():
@@ -55,6 +34,41 @@ def get_template_images(template_version_id):
     with get_connection() as connection:
         with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(load_query("get_template_images.sql"), (template_version_id,))
+            return cursor.fetchall()
+
+
+def get_assembled_template(template_version_id):
+    with get_connection() as connection:
+        connection.read_only = True
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(load_query("assemble_template.sql"), (template_version_id,))
+            return cursor.fetchone()
+
+
+def get_block_template_versions():
+    with get_connection() as connection:
+        connection.read_only = True
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(load_query("get_block_template_versions.sql"))
+            return cursor.fetchall()
+
+
+def get_builder_catalog():
+    with get_connection() as connection:
+        connection.read_only = True
+        with connection.cursor(row_factory=dict_row) as cursor:
+            catalog = {}
+            for name in ("layouts", "blocks", "templates", "table_options", "image_options"):
+                cursor.execute(load_query(f"get_builder_{name}.sql"))
+                catalog[name] = cursor.fetchall()
+            return catalog
+
+
+def get_template_version_blocks(template_version_id):
+    with get_connection() as connection:
+        connection.read_only = True
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(load_query("get_template_version_blocks.sql"), (template_version_id,))
             return cursor.fetchall()
 
 

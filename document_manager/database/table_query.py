@@ -1,8 +1,8 @@
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from database import get_connection
-from database_metadata import validate_table_request
+from document_manager.database.connection import get_connection
+from document_manager.database.metadata import validate_table_request
 
 
 def fetch_table_rows(table_definition, document_context=None):

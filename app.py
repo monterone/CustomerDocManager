@@ -1,17 +1,13 @@
-import json
-import os
 from datetime import datetime
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from database import get_customers, get_template, get_template_names, get_customers_values
-from document_generation import generate_pdf, generate_rtf
-from document_service import load_table_definitions, load_image_definitions, generate_docx_from_queries
-from templating import render_template
+from document_manager.database.repository import get_customers, get_template, get_template_names, get_customers_values
+from document_manager.documents.generation import generate_pdf, generate_rtf
+from document_manager.services.document_service import load_table_definitions, load_image_definitions, generate_docx_from_queries
+from document_manager.documents.templating import render_template
 
 
 load_dotenv()
@@ -24,11 +20,13 @@ st.set_page_config(
 )
 
 st.title("Customer Document Manager")
+st.page_link("pages/1_Block_preview.py", label="Preview templates built from blocks")
+st.page_link("pages/2_Template_builder.py", label="Build a template from reusable blocks")
 
 template_names = get_template_names()
 
 if not template_names:
-    st.error("Active templates were not found. Please add templates to the database.")
+    st.error("Active templates were not found. Please add templates to the document_manager.database.repository.")
 else:
     template_name = st.selectbox(
         "SELECT TEMPLATE",
@@ -44,9 +42,6 @@ selected_customer = st.selectbox(
 )
 
 customer_id = selected_customer[0]
-
-recipient_email = st.text_input("Recipient email")
-send_by_email = st.button("Send document by email")
 
 template_row = get_template(template_name)
 if template_row is None:
@@ -72,7 +67,7 @@ else:
         values = get_customers_values(customer_id)
 
         if values is None:
-            st.error("Customer details were not found in the database.")
+            st.error("Customer details were not found in the document_manager.database.repository.")
             st.stop()
 
         values["current_date"] = datetime.now(ZoneInfo("Asia/Yerevan")).strftime("%d/%m/%Y")
@@ -113,7 +108,7 @@ else:
     values = get_customers_values(customer_id)
 
     if values is None:
-        st.error("Customer details were not found in the database.")
+        st.error("Customer details were not found in the document_manager.database.repository.")
         st.stop()
 
     values["current_date"] = current_date
@@ -144,36 +139,3 @@ else:
                 file_name=f"customer_{customer_id}.rtf",
                 mime="application/rtf",
             )
-
-    if send_by_email:
-        if not recipient_email.strip():
-            st.error("Enter a recipient email address.")
-        else:
-            webhook_url = os.getenv("N8N_WEBHOOK_URL")
-            if not webhook_url:
-                st.error("N8N_WEBHOOK_URL is not configured.")
-            else:
-                payload = json.dumps(
-                    {
-                        "customer_id": customer_id,
-                        "email": recipient_email.strip(),
-                        "document_format": document_format,
-                        "template_name": template_name
-                    }
-                ).encode("utf-8")
-                request = Request(
-                    webhook_url,
-                    data=payload,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-
-                try:
-                    with urlopen(request, timeout=30) as response:
-                        response.read()
-                except HTTPError as error:
-                    st.error(f"n8n returned HTTP {error.code}.")
-                except (URLError, TimeoutError) as error:
-                    st.error(f"Could not connect to n8n: {error}")
-                else:
-                    st.success("Request sent to n8n.")

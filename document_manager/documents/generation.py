@@ -2,7 +2,7 @@
 
 from io import BytesIO
 from math import isfinite
-from pathlib import Path
+from document_manager.paths import ASSETS_DIR
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
@@ -126,8 +126,8 @@ def generate_pdf(rendered_text):
     output = BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4)
 
-    font_path = Path(__file__).parent / "assets" / "fonts" / "NotoSansArmenian-Regular.ttf"
-    font_bold_path = Path(__file__).parent / "assets" / "fonts" / "NotoSansArmenian-Bold.ttf"
+    font_path = ASSETS_DIR / "fonts" / "NotoSansArmenian-Regular.ttf"
+    font_bold_path = ASSETS_DIR / "fonts" / "NotoSansArmenian-Bold.ttf"
 
     pdfmetrics.registerFont(TTFont("NotoSansArmenian", str(font_path)))
     pdfmetrics.registerFont(TTFont("NotoSansArmenian-Bold", str(font_bold_path)))

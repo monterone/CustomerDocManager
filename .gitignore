@@ -14,5 +14,8 @@ venv/
 
 *.log
 
-templates/
+examples/docx/
+examples/html/
+output/
+
 tests/

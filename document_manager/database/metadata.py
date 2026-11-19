@@ -6,7 +6,7 @@ construct data queries, or change database objects.
 
 from psycopg.rows import dict_row
 
-from database import get_connection, load_query
+from document_manager.database.connection import get_connection, load_query
 
 
 def _validate_name(value, label):

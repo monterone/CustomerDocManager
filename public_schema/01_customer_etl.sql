@@ -58,7 +58,6 @@ CREATE TABLE IF NOT EXISTS public.template_version_tables (
     placeholder_name VARCHAR(100) NOT NULL CHECK (btrim(placeholder_name) <> ''),
     columns_config JSONB NOT NULL,
     style VARCHAR(100) NOT NULL DEFAULT 'Table Grid' CHECK (btrim(style) <> ''),
-    source_key VARCHAR(100) NOT NULL CHECK (btrim(source_key) <> ''),
     query_config JSONB,
     CONSTRAINT template_version_tables_query_config_check
         CHECK (query_config IS NULL OR jsonb_typeof(query_config) = 'object'),
@@ -95,6 +94,99 @@ CREATE TABLE IF NOT EXISTS public.template_version_images (
 
 CREATE INDEX IF NOT EXISTS template_version_images_image_id_idx
     ON public.template_version_images (image_id);
+
+CREATE TABLE IF NOT EXISTS public.template_layout_versions (
+    layout_version_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code VARCHAR(100) NOT NULL CHECK (btrim(code) <> ''),
+    name VARCHAR(255) NOT NULL CHECK (btrim(name) <> ''),
+    version_number INTEGER NOT NULL CHECK (version_number > 0),
+    content_html TEXT NOT NULL
+        CONSTRAINT template_layout_versions_html_check CHECK (btrim(content_html) <> ''),
+    page_settings JSONB NOT NULL DEFAULT '{}'::jsonb
+        CONSTRAINT template_layout_versions_page_settings_check
+        CHECK (jsonb_typeof(page_settings) = 'object'),
+    style_config JSONB NOT NULL DEFAULT '{}'::jsonb
+        CONSTRAINT template_layout_versions_style_config_check
+        CHECK (jsonb_typeof(style_config) = 'object'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (code, version_number)
+);
+
+ALTER TABLE public.template_versions
+    ADD COLUMN IF NOT EXISTS layout_version_id INTEGER
+        REFERENCES public.template_layout_versions (layout_version_id) ON DELETE RESTRICT;
+
+CREATE TABLE IF NOT EXISTS public.template_blocks (
+    block_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code VARCHAR(100) NOT NULL UNIQUE CHECK (btrim(code) <> ''),
+    name VARCHAR(255) NOT NULL CHECK (btrim(name) <> ''),
+    block_type VARCHAR(10) NOT NULL CHECK (block_type IN ('header', 'body', 'footer')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (block_id, block_type)
+);
+
+CREATE TABLE IF NOT EXISTS public.template_block_versions (
+    block_version_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    block_id INTEGER NOT NULL,
+    block_type VARCHAR(10) NOT NULL,
+    version_number INTEGER NOT NULL CHECK (version_number > 0),
+    content_html TEXT NOT NULL
+        CONSTRAINT template_block_versions_html_check CHECK (btrim(content_html) <> ''),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (block_id, block_type)
+        REFERENCES public.template_blocks (block_id, block_type) ON DELETE RESTRICT,
+    UNIQUE (block_id, version_number),
+    UNIQUE (block_version_id, block_type)
+);
+
+CREATE TABLE IF NOT EXISTS public.template_version_blocks (
+    template_version_id INTEGER NOT NULL
+        REFERENCES public.template_versions (template_version_id) ON DELETE RESTRICT,
+    block_version_id INTEGER NOT NULL,
+    block_type VARCHAR(10) NOT NULL,
+    position INTEGER NOT NULL CHECK (position > 0),
+    FOREIGN KEY (block_version_id, block_type)
+        REFERENCES public.template_block_versions (block_version_id, block_type)
+        ON DELETE RESTRICT,
+    PRIMARY KEY (template_version_id, block_type, position),
+    CHECK (block_type = 'body' OR position = 1)
+);
+
+CREATE INDEX IF NOT EXISTS template_version_blocks_block_version_idx
+    ON public.template_version_blocks (block_version_id, block_type);
+
+CREATE INDEX IF NOT EXISTS template_versions_layout_version_idx
+    ON public.template_versions (layout_version_id);
+
+ALTER TABLE public.template_versions
+    ADD COLUMN IF NOT EXISTS storage_mode VARCHAR(10) NOT NULL DEFAULT 'file'
+        CONSTRAINT template_versions_storage_mode_check
+        CHECK (storage_mode IN ('file', 'blocks'));
+
+ALTER TABLE public.template_versions
+    DROP CONSTRAINT template_versions_content_check,
+    ADD CONSTRAINT template_versions_content_check CHECK (
+        (
+            storage_mode = 'file'
+            AND layout_version_id IS NULL
+            AND (
+                (template_format = 'text'
+                 AND template_text IS NOT NULL AND template_file IS NULL)
+                OR
+                (template_format = 'docx'
+                 AND template_text IS NULL AND template_file IS NOT NULL
+                 AND octet_length(template_file) > 0)
+            )
+        )
+        OR
+        (
+            storage_mode = 'blocks'
+            AND template_format = 'docx'
+            AND layout_version_id IS NOT NULL
+            AND template_text IS NULL
+            AND template_file IS NULL
+        )
+    );
 
 INSERT INTO public.templates (code, name, description)
 VALUES (

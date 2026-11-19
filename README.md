@@ -80,13 +80,21 @@ Stop the containers while preserving their data with:
 docker compose down
 ```
 
-To delete the database and pgAdmin volumes and initialize them again from
-scratch, use:
+PostgreSQL and pgAdmin keep their data in the named volumes `postgres_data`
+and `pgadmin_data`. Start the services again with `docker compose up -d`;
+the existing database is reused.
 
-```bash
-docker compose down -v
-docker compose up -d
-```
+## Project organization
+
+Application code lives in `document_manager/`: database access and SQL in
+`database/`, workflows in `services/`, rendering and exporters in `documents/`.
+Streamlit screens remain in `pages/`; `app.py` is the application entry point.
+Docker Compose runs only PostgreSQL and pgAdmin. Document generation runs in
+the local Streamlit process and does not require a separate HTTP API.
+Local source templates are in `examples/docx/` and `examples/html/`, while
+generated documents and conversion reports are in `output/`.
+
+See [the project structure guide](docs/project_structure.md) for the file map.
 
 ## Streamlit application
 
@@ -106,6 +114,14 @@ streamlit run app.py
 Open the Streamlit URL shown in the terminal, usually
 `http://localhost:8501`.
 
+### Block template preview
+
+Choose **Preview templates built from blocks** on the main page, or open
+**Block preview** from the sidebar. Select a draft or published block-template
+version and a customer. The page shows the selected layout and ordered blocks.
+Choose **DOCX**, **RTF**, or **PDF**, click **Generate preview**, then download the result. Changing the customer, version, or format clears the previous download. Preview does not
+publish or modify templates. Creating and editing blocks is not included yet.
+
 ## SQL initialization
 
 `public_schema/01_customer_etl.sql`:
@@ -119,6 +135,9 @@ Open the Streamlit URL shown in the terminal, usually
 - Preserves Armenian Unicode text because the CSV and PostgreSQL connection
   use UTF-8.
 
+`public_schema/02_assemble_template.sql` installs the block assembly procedure
+`public.assemble_template` after the schema is created. It does not seed blocks.
+
 New databases are initialized directly with the current schema. No legacy
 `document_templates` table is created. Scripts in `public_schema` run automatically
 only when the PostgreSQL data volume is empty; restarting an existing database
@@ -131,3 +150,44 @@ Do not rerun `01_customer_etl.sql` to upgrade an existing database: it truncates
 and reloads customers from CSV. Additional templates, uploaded DOCX files, and
 customer columns added manually to a development database are not exported by
 these initialization scripts; back them up separately when moving that data.
+
+### PDF export for block templates
+
+Block preview supports DOCX, RTF, and PDF. PDF is generated directly from rendered HTML using the existing ReportLab dependency; no DOCX conversion, LibreOffice, or additional system packages are needed. The shared HTML subset, page settings, asset validation, and database data pipeline apply to all three formats.
+
+PDF supports repeating table headings, PNG/JPEG images, headers, footers, and page numbers. Header/footer content must fit the reserved margins. Embedded fonts cover Latin and Armenian with a bundled Vera fallback; unsupported characters or unavailable italic glyphs raise an explicit error rather than disappearing. Arbitrary HTML/CSS is not supported.
+
+### Block template builder
+
+Open **Build a template from reusable blocks** on the main page, or **Template builder** in the sidebar.
+
+1. Choose **New template** and enter a name, or add a new version to an existing template.
+2. Select a layout version and optional header/footer block versions.
+3. Add body blocks and use **Up**, **Down**, and **Remove** to arrange them. Repeated blocks are supported.
+4. Review each placeholder's content type. Text/numbers use generation values; tables and images reuse settings from the catalog. When multiple settings share a name, choose the intended source explicitly.
+5. In the right-hand **Document preview** panel, select a customer and click **Update preview**. The PDF is displayed on the page, without saving or downloading.
+6. Click **Save draft** when ready. **Preview saved draft** opens the existing DOCX/RTF/PDF generation page.
+
+The builder reads all catalogs from PostgreSQL, without hard-coded document names or business tables. It pins the selected layout/block versions and copies selected table/image bindings into the new draft. Saving uses one transaction, the existing SQL assembly procedure, and an HTML/assets preflight; a validation failure rolls back the whole save. Published versions are never edited or published by this screen.
+
+This first stage assembles existing layouts, blocks, and configured tables/images. Creating or editing those catalog entries is not yet included. Generation preview currently uses customers as its record selector; the builder does not add new data-source or relation capabilities. No schema migration or reseeding is required.
+
+### Inline preview in the builder
+
+The builder uses two columns: a scrollable composition editor on the left and an
+embedded PDF viewer on the right. A template name is not required for preview.
+Changing blocks, their order, content bindings, or the preview customer discards
+the stale PDF; click **Update preview** to regenerate it. Editing only the template
+name does not discard the preview. The PDF can also be downloaded if needed.
+
+Install the PDF viewer along with the project requirements (`streamlit[pdf]` is
+included). If it was installed while Streamlit was running, stop the server and
+start it again; a browser refresh alone does not discover the new component.
+When viewer registration is unavailable, the builder shows a restart message
+and keeps the generated PDF available for download.
+Preview uses the existing SQL assembly procedure and the same data
+queries and PDF exporter as saved documents. To assemble an unsaved composition,
+the service creates temporary composition rows inside a transaction that always
+rolls back, including when generation fails. No draft is saved by preview, although
+PostgreSQL identity sequences can advance. Saving remains a separate transaction.
+No database schema changes are required.
