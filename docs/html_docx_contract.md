@@ -66,14 +66,17 @@ Exact visual pagination and glyph rendering in Word still require manual checks.
 
 `document_service.generate_document_from_blocks(template_version_id, values,
 document_context=None, document_format="DOCX")` connects SQL assembly, the existing
-table/image loaders, HTML rendering, and the selected DOCX/RTF exporter.
+table/image loaders, HTML rendering, and the selected DOCX/RTF/PDF exporter.
 `generate_docx_from_blocks` remains a compatibility wrapper. All configurations use the requested template
 version. The caller supplies scalar values and the context needed by related
 tables; the method returns document bytes without writing a file or publishing the
 template. Non-empty `style_config` is explicitly rejected until custom style
-profiles are implemented. `pages/1_Block_preview.py` uses this service to preview
-draft/published block versions and download either format. The main page retains its
-existing whole-file generation path. The preview page does not edit or publish.
+profiles are implemented. `pages/1_Create_document.py` provides a unified interface
+for text templates, whole DOCX templates, and block versions. The service function
+`generate_document_from_version` selects the appropriate existing generator from
+the saved version's storage mode and format. Published versions are shown by default;
+drafts are optional and automatically enabled when opening a saved builder draft.
+Generation does not edit or publish template versions.
 
 `html_rendering.render_html_template(template_html, values, tables=None, images=None)` fills scalar
 placeholders such as `{{first_name}}` before export. Names follow
@@ -154,15 +157,36 @@ defaulting to `{}`. Page setting keys correspond to the exporter API above.
 Custom style profiles are stored for future support; the exporter currently uses
 its fixed styles and does not apply `style_config`. Database constraints check
 non-empty content and JSON object shape, not HTML grammar or individual settings.
-These require validation before use. SQL assembly is implemented by
-`public.assemble_template` and is used by the block preview page.
+These require validation before use. SQL assembly is implemented by the shared
+read-only function `public.assemble_composition`; `public.assemble_template`
+loads the composition of a saved version and delegates to that function.
 Whole-file DOCX data in `template_versions.template_file` is unchanged.
 
 ### SQL assembly
 
-`public_schema/02_assemble_template.sql` installs the procedure after schema
-creation. It reads data only and does not save a generated file or fill values.
+`public_schema/02_assemble_template.sql` installs both routines after schema
+creation. Applying it to an existing database updates routine definitions only.
+Assembly reads data and does not save a generated file or fill values.
 Draft versions can be assembled for preview; publication is not required.
+
+Unsaved preview passes a composition directly, without creating a template version:
+
+```sql
+SELECT * FROM public.assemble_composition(
+    1,
+    '[{"block_version_id": 5, "block_type": "body", "position": 1}]'::jsonb
+);
+```
+
+Replace the example IDs with existing layout and block version IDs. Each binding
+contains exactly `block_version_id`, `block_type`, and `position`. Roles are
+header/body/footer; positions must be positive and unique within a role.
+Header/footer positions must be 1. Repeating a body block at distinct positions
+is supported. Missing block versions and role mismatches are rejected.
+The function is `STABLE`, and the Python preview connection is read-only.
+Preview does not execute INSERT or consume identity values.
+
+Saved-version callers retain the existing interface:
 
 ```sql
 CALL public.assemble_template(12, NULL, NULL, NULL);

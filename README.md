@@ -95,6 +95,8 @@ Local source templates are in `examples/docx/` and `examples/html/`, while
 generated documents and conversion reports are in `output/`.
 
 See [the project structure guide](docs/project_structure.md) for the file map.
+Open issues and proposed next steps are tracked in the
+[architecture backlog](docs/architecture_backlog.md).
 
 ## Streamlit application
 
@@ -114,13 +116,24 @@ streamlit run app.py
 Open the Streamlit URL shown in the terminal, usually
 `http://localhost:8501`.
 
-### Block template preview
+### Create documents
 
-Choose **Preview templates built from blocks** on the main page, or open
-**Block preview** from the sidebar. Select a draft or published block-template
-version and a customer. The page shows the selected layout and ordered blocks.
-Choose **DOCX**, **RTF**, or **PDF**, click **Generate preview**, then download the result. Changing the customer, version, or format clears the previous download. Preview does not
-publish or modify templates. Creating and editing blocks is not included yet.
+The sidebar has two sections: **Create document** and **Template builder**.
+On **Create document**, choose a template, a version, a customer, and an output
+format, then click **Generate document**. Published versions are shown by default;
+check **Include draft versions** to inspect drafts. Retired versions and archived
+templates are not selectable.
+
+The application chooses the existing generation path automatically:
+
+- Text templates: PDF or RTF.
+- Whole DOCX templates: DOCX.
+- Templates assembled from blocks: PDF, DOCX, or RTF.
+
+PDFs are displayed on the page and all outputs can be downloaded. For block
+versions, **Template composition** shows the layout and ordered blocks. Changing
+the customer, version, or format clears the previous result. This page reads saved
+versions and does not create, edit, or publish templates.
 
 ## SQL initialization
 
@@ -135,8 +148,11 @@ publish or modify templates. Creating and editing blocks is not included yet.
 - Preserves Armenian Unicode text because the CSV and PostgreSQL connection
   use UTF-8.
 
-`public_schema/02_assemble_template.sql` installs the block assembly procedure
-`public.assemble_template` after the schema is created. It does not seed blocks.
+`public_schema/02_assemble_template.sql` installs the read-only assembly function
+`public.assemble_composition` and the saved-version procedure
+`public.assemble_template`. It does not seed blocks or modify stored template data.
+For an existing database, apply this script to update the assembly routines;
+do not rerun the customer initialization ETL.
 
 New databases are initialized directly with the current schema. No legacy
 `document_templates` table is created. Scripts in `public_schema` run automatically
@@ -153,7 +169,7 @@ these initialization scripts; back them up separately when moving that data.
 
 ### PDF export for block templates
 
-Block preview supports DOCX, RTF, and PDF. PDF is generated directly from rendered HTML using the existing ReportLab dependency; no DOCX conversion, LibreOffice, or additional system packages are needed. The shared HTML subset, page settings, asset validation, and database data pipeline apply to all three formats.
+Create document supports DOCX, RTF, and PDF for block-based versions. PDF is generated directly from rendered HTML using the existing ReportLab dependency; no DOCX conversion, LibreOffice, or additional system packages are needed. The shared HTML subset, page settings, asset validation, and database data pipeline apply to all three formats.
 
 PDF supports repeating table headings, PNG/JPEG images, headers, footers, and page numbers. Header/footer content must fit the reserved margins. Embedded fonts cover Latin and Armenian with a bundled Vera fallback; unsupported characters or unavailable italic glyphs raise an explicit error rather than disappearing. Arbitrary HTML/CSS is not supported.
 
@@ -166,7 +182,7 @@ Open **Build a template from reusable blocks** on the main page, or **Template b
 3. Add body blocks and use **Up**, **Down**, and **Remove** to arrange them. Repeated blocks are supported.
 4. Review each placeholder's content type. Text/numbers use generation values; tables and images reuse settings from the catalog. When multiple settings share a name, choose the intended source explicitly.
 5. In the right-hand **Document preview** panel, select a customer and click **Update preview**. The PDF is displayed on the page, without saving or downloading.
-6. Click **Save draft** when ready. **Preview saved draft** opens the existing DOCX/RTF/PDF generation page.
+6. Click **Save draft** when ready. **Open saved draft** opens **Create document**, enables draft versions, and selects the new version automatically.
 
 The builder reads all catalogs from PostgreSQL, without hard-coded document names or business tables. It pins the selected layout/block versions and copies selected table/image bindings into the new draft. Saving uses one transaction, the existing SQL assembly procedure, and an HTML/assets preflight; a validation failure rolls back the whole save. Published versions are never edited or published by this screen.
 
@@ -185,9 +201,10 @@ included). If it was installed while Streamlit was running, stop the server and
 start it again; a browser refresh alone does not discover the new component.
 When viewer registration is unavailable, the builder shows a restart message
 and keeps the generated PDF available for download.
-Preview uses the existing SQL assembly procedure and the same data
-queries and PDF exporter as saved documents. To assemble an unsaved composition,
-the service creates temporary composition rows inside a transaction that always
-rolls back, including when generation fails. No draft is saved by preview, although
-PostgreSQL identity sequences can advance. Saving remains a separate transaction.
-No database schema changes are required.
+Preview calls `public.assemble_composition` with a layout version ID and the
+selected block versions, roles, and positions. It reads table/image settings
+directly and uses the same data queries and PDF exporter as saved documents.
+The preview connection is read-only: no temporary records are inserted and no
+identity sequences are consumed, including when generation fails.
+`public.assemble_template` delegates saved-version assembly to the same function.
+Save draft remains a separate write transaction. No table schema changes are required.

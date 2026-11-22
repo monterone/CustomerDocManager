@@ -2,8 +2,8 @@
 
 ```text
 CustomerDocManager/
-├── app.py                         # Streamlit entry point
-├── pages/                         # Streamlit preview and builder screens
+├── app.py                         # Streamlit entry point and two-page navigation
+├── pages/                         # Document creation and template builder screens
 ├── document_manager/
 │   ├── paths.py                   # Shared paths to project resources
 │   ├── database/
@@ -35,7 +35,9 @@ CustomerDocManager/
 └── docs/
 ```
 
-The application entry point is `streamlit run app.py`.
+The application entry point is `streamlit run app.py`. It defines two pages with
+`st.navigation`: **Create document** and **Template builder**.
+The shared PDF viewer is in `document_manager/ui/pdf_preview.py`.
 Application modules use the `document_manager` package. For example:
 
 ```python

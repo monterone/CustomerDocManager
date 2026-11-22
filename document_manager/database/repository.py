@@ -45,11 +45,11 @@ def get_assembled_template(template_version_id):
             return cursor.fetchone()
 
 
-def get_block_template_versions():
+def get_document_versions():
     with get_connection() as connection:
         connection.read_only = True
         with connection.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(load_query("get_block_template_versions.sql"))
+            cursor.execute(load_query("get_document_versions.sql"))
             return cursor.fetchall()
 
 
@@ -72,18 +72,12 @@ def get_template_version_blocks(template_version_id):
             return cursor.fetchall()
 
 
-def get_template(template_name):
+def get_document_version(template_version_id):
     with get_connection() as connection:
-        with connection.cursor() as cursor:
+        connection.read_only = True
+        with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                load_query("get_template.sql"),
-                (template_name, ),
+                load_query("get_document_version.sql"),
+                (template_version_id,),
             )
             return cursor.fetchone()
-
-
-def get_template_names():
-    with get_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(load_query("get_template_names.sql"))
-            return [row[0] for row in cursor.fetchall()]

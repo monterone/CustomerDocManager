@@ -1,5 +1,6 @@
-from document_manager.database.repository import get_template_tables, get_template_images, get_assembled_template
-from document_manager.documents.generation import generate_docx
+from document_manager.database.repository import get_template_tables, get_template_images, get_assembled_template, get_document_version
+from document_manager.documents.generation import generate_docx, generate_pdf, generate_rtf
+from document_manager.documents.templating import render_template
 from document_manager.documents.exporters.docx import export_html_to_docx
 from document_manager.documents.exporters.rtf import export_html_to_rtf
 from document_manager.documents.exporters.pdf import export_html_to_pdf
@@ -79,7 +80,7 @@ def generate_document_from_blocks(template_version_id, values, document_context=
         raise ValueError("Block document format must be DOCX, RTF, or PDF.")
     assembled = get_assembled_template(template_version_id)
     if assembled is None:
-        raise ValueError("The assembled template was not returned by the document_manager.database.repository.")
+        raise ValueError("The assembled template was not returned by the database.")
     if assembled["style_config"] != {}:
         raise ValueError("Custom style profiles are not supported by the HTML exporter yet.")
     definitions = load_table_definitions(template_version_id)
@@ -92,3 +93,32 @@ def generate_document_from_blocks(template_version_id, values, document_context=
 
 def generate_docx_from_blocks(template_version_id, values, document_context=None):
     return generate_document_from_blocks(template_version_id, values, document_context, document_format="DOCX")
+
+
+def available_document_formats(version):
+    """Expose formats supported by the existing generation path for this version."""
+    if version["storage_mode"] == "blocks":
+        return ["PDF", "DOCX", "RTF"]
+    if version["storage_mode"] == "file":
+        if version["template_format"] == "text":
+            return ["PDF", "RTF"]
+        if version["template_format"] == "docx":
+            return ["DOCX"]
+    raise ValueError("This template's storage or content format is not supported.")
+
+
+def generate_document_from_version(template_version_id, values, document_context=None, document_format="PDF"):
+    """Route any selectable saved version to its existing document generator."""
+    version = get_document_version(template_version_id)
+    if version is None:
+        raise ValueError("The selected template version is no longer available. Refresh the page.")
+    if document_format not in available_document_formats(version):
+        raise ValueError("The selected output format is not supported by this template version.")
+    if version["storage_mode"] == "blocks":
+        return generate_document_from_blocks(template_version_id, values, document_context, document_format)
+    if version["template_format"] == "docx":
+        return generate_docx_from_queries(version["template_file"], values,
+                                           load_table_definitions(template_version_id), document_context,
+                                           images=load_image_definitions(template_version_id))
+    rendered = render_template(version["template_text"], values)
+    return {"PDF": generate_pdf, "RTF": generate_rtf}[document_format](rendered)

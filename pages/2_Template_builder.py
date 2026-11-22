@@ -2,19 +2,19 @@
 
 from pathlib import Path
 from datetime import datetime
-from hashlib import sha256
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 import psycopg
 import streamlit as st
-from streamlit.errors import StreamlitAPIException
 from dotenv import load_dotenv
 
 from document_manager.database.repository import get_builder_catalog, get_customers, get_customers_values
 from document_manager.services.template_builder import (
     find_placeholder_names, save_block_template_draft, preview_block_composition,
 )
+from document_manager.ui.pdf_preview import show_pdf_preview
+from document_manager.ui.labels import template_labels
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -36,6 +36,7 @@ if not catalog["layouts"] or not any(block["block_type"] == "body" for block in 
 layouts = {item["layout_version_id"]: item for item in catalog["layouts"]}
 blocks = {item["block_version_id"]: item for item in catalog["blocks"]}
 templates = {item["template_id"]: item for item in catalog["templates"]}
+labels = template_labels(templates)
 
 editor, document_preview = st.columns([1, 1.3], gap="large")
 
@@ -47,7 +48,7 @@ with editor.container(height=1100, border=True):
         name = st.text_input("Template name", max_chars=255)
     elif templates:
         template_id = st.selectbox("Template", list(templates),
-                                   format_func=lambda key: f"{templates[key]['name']} ({templates[key]['code']})")
+                                   format_func=labels.__getitem__)
         st.caption("Saving adds a draft version. It does not replace or publish any existing version.")
     else:
         st.info("There are no existing templates. Choose New template instead.")
@@ -196,14 +197,15 @@ with editor.container(height=1100, border=True):
         else:
             st.session_state["builder_saved"] = {"signature": signature, "result": result}
             # Preview reads this ID once and selects the newly saved draft.
-            st.session_state["block_preview_requested_version"] = result["template_version_id"]
+            st.session_state["document_requested_version"] = result["template_version_id"]
             st.rerun()
 
     saved = st.session_state.get("builder_saved")
     if saved and saved["signature"] == signature:
         result = saved["result"]
         st.success(f"Draft v{result['version_number']} saved.")
-        st.page_link("pages/1_Block_preview.py", label="Preview saved draft")
+        st.session_state["document_requested_version"] = result["template_version_id"]
+        st.page_link("pages/1_Create_document.py", label="Open saved draft")
 
 
 with document_preview:
@@ -246,14 +248,7 @@ with document_preview:
     preview_result = st.session_state.get("builder_preview")
     if preview_result and preview_result["signature"] == preview_signature:
         data = preview_result["data"]
-        try:
-            st.pdf(data, height=900, key="builder_pdf_" + sha256(data).hexdigest())
-        except StreamlitAPIException as error:
-            if "streamlit-pdf.pdf_viewer" not in str(error) or "asset_dir" not in str(error):
-                raise
-            st.warning("The PDF viewer is not registered in this running server. Restart Streamlit "
-                       "after installing its PDF component, then open the builder again. "
-                       "The generated PDF is available for download below.")
+        show_pdf_preview(data, key_prefix="builder_pdf_")
         st.download_button("Download PDF preview", data=data, file_name="document_preview.pdf", mime="application/pdf")
     elif not changed:
         st.info("Choose your blocks and content settings, then click Update preview to see the document here.")
