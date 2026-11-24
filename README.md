@@ -186,7 +186,9 @@ Open **Build a template from reusable blocks** on the main page, or **Template b
 
 The builder reads all catalogs from PostgreSQL, without hard-coded document names or business tables. It pins the selected layout/block versions and copies selected table/image bindings into the new draft. Saving uses one transaction, the existing SQL assembly procedure, and an HTML/assets preflight; a validation failure rolls back the whole save. Published versions are never edited or published by this screen.
 
-This first stage assembles existing layouts, blocks, and configured tables/images. Creating or editing those catalog entries is not yet included. Generation preview currently uses customers as its record selector; the builder does not add new data-source or relation capabilities. No schema migration or reseeding is required.
+Use **Create layout** in Template builder to save a named A4, A5, or Letter layout with portrait/landscape orientation, margins, and header/footer distances in millimeters. The new layout is selected automatically and can be reused across templates. It uses the controlled header/body/footer HTML skeleton. Existing layouts are preserved; editing them through new versions is a later step.
+
+The builder assembles existing blocks and configured tables/images. Creating or editing those catalog entries is not yet included. Generation preview currently uses customers as its record selector; the builder does not add new data-source or relation capabilities. No schema migration or reseeding is required.
 
 ### Inline preview in the builder
 

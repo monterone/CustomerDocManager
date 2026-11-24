@@ -15,6 +15,7 @@ from document_manager.services.template_builder import (
 )
 from document_manager.ui.pdf_preview import show_pdf_preview
 from document_manager.ui.labels import template_labels
+from document_manager.ui.layout_editor import show_layout_creator
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -28,6 +29,10 @@ try:
 except psycopg.Error:
     st.error("Could not load the catalog and customers. Check the database connection.")
     st.stop()
+
+show_layout_creator()
+if message := st.session_state.pop("builder_layout_message", None):
+    st.success(message)
 
 if not catalog["layouts"] or not any(block["block_type"] == "body" for block in catalog["blocks"]):
     st.info("Add at least one layout and one body block to the catalog before assembling templates.")
@@ -54,7 +59,12 @@ with editor.container(height=1100, border=True):
         st.info("There are no existing templates. Choose New template instead.")
         st.stop()
 
-    layout_id = st.selectbox("Layout", list(layouts),
+    requested_layout = st.session_state.pop("builder_requested_layout", None)
+    if requested_layout in layouts:
+        st.session_state["builder_layout_id"] = requested_layout
+    if st.session_state.get("builder_layout_id") not in layouts:
+        st.session_state["builder_layout_id"] = next(iter(layouts))
+    layout_id = st.selectbox("Layout", list(layouts), key="builder_layout_id",
                              format_func=lambda key: f"{layouts[key]['name']} — v{layouts[key]['version_number']}")
     layout = layouts[layout_id]
     with st.expander("Page settings"):

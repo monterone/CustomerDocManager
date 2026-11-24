@@ -91,8 +91,11 @@ Sources: [html_rendering.py](../document_manager/documents/html_rendering.py),
 **Priority:** P1. **Type:** missing service and interface over existing storage.
 
 `template_layout_versions` already stores layout HTML, page settings, and versions.
-The interface can select a layout and display settings, but cannot create a layout
-such as Form 0 or save a new version with different page geometry.
+Basic creation implemented on 2026-11-22: Template builder can create and immediately
+select a named A4/A5/Letter layout with orientation, margins, and header/footer
+distances. The service validates geometry and inserts an independent version 1
+with the controlled HTML skeleton. Existing rows are preserved. Creating a new
+version of an existing layout remains open.
 
 **Direction:** start with a name, page size, orientation, margins, and header/footer
 distances. Generate the supported HTML skeleton and reuse `validate_page_settings`.
